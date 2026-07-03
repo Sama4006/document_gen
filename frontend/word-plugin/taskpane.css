@@ -1,0 +1,491 @@
+/* ==================== GENERAL STYLES ==================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #333;
+    padding: 0;
+}
+
+.container {
+    background: white;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ==================== HEADER ==================== */
+
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    font-size: 13px;
+    opacity: 0.9;
+    font-weight: 300;
+}
+
+/* ==================== TABS ==================== */
+
+.tabs {
+    display: flex;
+    border-bottom: 2px solid #e0e0e0;
+    background: #f9f9f9;
+    padding: 0 20px;
+    gap: 5px;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #999;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.tab-button:hover {
+    color: #667eea;
+    background: #f0f0f0;
+}
+
+.tab-button.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+}
+
+/* ==================== TAB CONTENT ==================== */
+
+.tab-content {
+    display: none;
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.tab-content h2 {
+    color: #333;
+    font-size: 22px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.help-text {
+    color: #999;
+    font-size: 13px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+/* ==================== FORMS ==================== */
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #333;
+    font-size: 13px;
+}
+
+.input-field,
+.textarea-field {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.3s ease;
+    background: #fff;
+}
+
+.input-field:focus,
+.textarea-field:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.textarea-field {
+    resize: vertical;
+    min-height: 100px;
+}
+
+/* ==================== BUTTONS ==================== */
+
+.btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-secondary {
+    background: #f0f0f0;
+    color: #333;
+    border: 1px solid #ddd;
+}
+
+.btn-secondary:hover {
+    background: #e8e8e8;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 12px;
+    width: auto;
+    margin-top: 0;
+}
+
+.btn-block {
+    width: 100%;
+    margin-top: 10px;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ==================== STATUS & MESSAGES ==================== */
+
+.status-message {
+    padding: 12px 20px;
+    margin: 15px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    display: none;
+    animation: slideIn 0.3s ease;
+}
+
+.status-message.hidden {
+    display: none;
+}
+
+.status-message.show {
+    display: block;
+}
+
+.status-message.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-message.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.status-message.info {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.status-message.loading {
+    background: #e7f3ff;
+    color: #004085;
+    border: 1px solid #b8daff;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==================== RESULT BOXES ==================== */
+
+.result-box {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 20px;
+    display: none;
+}
+
+.result-box.show {
+    display: block;
+    animation: slideIn 0.3s ease;
+}
+
+.result-box h3 {
+    color: #333;
+    font-size: 14px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.generated-text {
+    background: white;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #555;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.info-box {
+    background: #e3f2fd;
+    border: 1px solid #90caf9;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #1565c0;
+}
+
+/* ==================== PLACEHOLDERS ==================== */
+
+.placeholders-list {
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 15px;
+    display: none;
+}
+
+.placeholders-list.show {
+    display: block;
+    animation: slideIn 0.3s ease;
+}
+
+.placeholders-list h3 {
+    font-size: 14px;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+#placeholdersContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.placeholder-tag {
+    background: white;
+    border: 1px solid #667eea;
+    color: #667eea;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.placeholders-form {
+    margin-top: 15px;
+}
+
+.placeholder-input-group {
+    margin-bottom: 12px;
+}
+
+.placeholder-input-group label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #555;
+    background: #f9f9f9;
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+
+.placeholder-input-group input,
+.placeholder-input-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+/* ==================== ADVANCED SECTION ==================== */
+
+.advanced-section {
+    padding: 20px;
+    border-top: 1px solid #e0e0e0;
+    background: #fafafa;
+}
+
+details {
+    cursor: pointer;
+}
+
+summary {
+    font-weight: 600;
+    color: #666;
+    font-size: 13px;
+    padding: 8px 0;
+    user-select: none;
+}
+
+summary:hover {
+    color: #667eea;
+}
+
+.settings-content {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e0e0e0;
+}
+
+/* ==================== FOOTER ==================== */
+
+.footer {
+    text-align: center;
+    padding: 15px;
+    border-top: 1px solid #e0e0e0;
+    background: #fafafa;
+    color: #999;
+    font-size: 11px;
+}
+
+/* ==================== LOADING SPINNER ==================== */
+
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #667eea;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* ==================== RESPONSIVE ==================== */
+
+@media (max-width: 600px) {
+    .header h1 {
+        font-size: 22px;
+    }
+
+    .tabs {
+        padding: 0 10px;
+        gap: 0;
+    }
+
+    .tab-button {
+        padding: 10px 8px;
+        font-size: 12px;
+    }
+
+    .tab-content {
+        padding: 15px;
+    }
+
+    .btn {
+        font-size: 12px;
+        padding: 8px 12px;
+    }
+}
+
+/* ==================== SCROLLBAR STYLING ==================== */
+
+.generated-text::-webkit-scrollbar,
+.tab-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.generated-text::-webkit-scrollbar-track,
+.tab-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.generated-text::-webkit-scrollbar-thumb,
+.tab-content::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.generated-text::-webkit-scrollbar-thumb:hover,
+.tab-content::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

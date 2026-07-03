@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>AI Document Generator</title>
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📄 AI Document Generator</h1>
+            <p class="subtitle">Powered by LLM + RAG</p>
+        </div>
+
+        <!-- Status Message -->
+        <div id="statusMessage" class="status-message hidden"></div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('ingest')">📤 Upload Document</button>
+            <button class="tab-button" onclick="switchTab('generate')">✨ Generate Content</button>
+            <button class="tab-button" onclick="switchTab('populate')">📋 Populate Template</button>
+        </div>
+
+        <!-- Tab 1: Ingest Document -->
+        <div id="ingest" class="tab-content active">
+            <h2>Step 1: Ingest Document</h2>
+            <p class="help-text">Upload a document to the AI knowledge base for context-aware generation.</p>
+            
+            <div class="form-group">
+                <label for="docName">Document Name:</label>
+                <input 
+                    type="text" 
+                    id="docName" 
+                    placeholder="e.g., Company Reports Q1 2026"
+                    class="input-field"
+                />
+            </div>
+
+            <div class="form-group">
+                <label for="docContent">Document Content:</label>
+                <textarea 
+                    id="docContent" 
+                    placeholder="Paste or type your document content here..."
+                    class="textarea-field"
+                    rows="8"
+                ></textarea>
+            </div>
+
+            <button onclick="ingestDocument()" class="btn btn-primary">
+                📤 Upload to Knowledge Base
+            </button>
+
+            <div id="ingestResult" class="result-box hidden"></div>
+        </div>
+
+        <!-- Tab 2: Generate Content -->
+        <div id="generate" class="tab-content">
+            <h2>Step 2: Generate Content</h2>
+            <p class="help-text">Generate content based on your prompt using the ingested documents.</p>
+            
+            <div class="form-group">
+                <label for="prompt">Your Prompt/Request:</label>
+                <textarea 
+                    id="prompt" 
+                    placeholder="e.g., Write an executive summary based on the Q1 reports..."
+                    class="textarea-field"
+                    rows="6"
+                ></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="retrievalK">Number of Context Documents to Retrieve:</label>
+                <input 
+                    type="number" 
+                    id="retrievalK" 
+                    value="3"
+                    min="1"
+                    max="10"
+                    class="input-field"
+                />
+            </div>
+
+            <button onclick="generateContent()" class="btn btn-primary">
+                ✨ Generate Content
+            </button>
+
+            <div id="generateResult" class="result-box hidden">
+                <h3>Generated Content:</h3>
+                <div id="generatedText" class="generated-text"></div>
+                <button onclick="copyGenerated()" class="btn btn-secondary btn-small">
+                    📋 Copy to Clipboard
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab 3: Populate Template -->
+        <div id="populate" class="tab-content">
+            <h2>Step 3: Populate Template</h2>
+            <p class="help-text">Auto-detect placeholders in the current document and fill them.</p>
+            
+            <div class="info-box">
+                <strong>ℹ️ Template Format:</strong> Use {{PLACEHOLDER_NAME}} in your Word document
+            </div>
+
+            <div class="form-group">
+                <button onclick="findPlaceholders()" class="btn btn-secondary btn-block">
+                    🔍 Find Placeholders in Current Document
+                </button>
+            </div>
+
+            <div id="placeholdersList" class="placeholders-list hidden">
+                <h3>Found Placeholders:</h3>
+                <div id="placeholdersContainer"></div>
+            </div>
+
+            <div id="placeholdersForm" class="form-group hidden">
+                <h3>Fill Placeholders:</h3>
+                <div id="placeholderInputs"></div>
+                
+                <button onclick="populateTemplate()" class="btn btn-primary btn-block">
+                    📋 Populate Document
+                </button>
+            </div>
+
+            <div id="populateResult" class="result-box hidden"></div>
+        </div>
+
+        <!-- Advanced Options -->
+        <div class="advanced-section">
+            <details>
+                <summary>⚙️ Settings</summary>
+                <div class="settings-content">
+                    <div class="form-group">
+                        <label for="backendUrl">Backend URL:</label>
+                        <input 
+                            type="text" 
+                            id="backendUrl" 
+                            value="http://localhost:8000"
+                            class="input-field"
+                        />
+                        <button onclick="testConnection()" class="btn btn-secondary btn-small">
+                            🔗 Test Connection
+                        </button>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>v1.0 | Built with ❤️ for Word</p>
+        </div>
+    </div>
+
+    <script src="office.js"></script>
+    <script src="taskpane.js"></script>
+</body>
+</html>
