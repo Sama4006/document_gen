@@ -27,7 +27,7 @@ Generated & Populated Word Documents
 
 ```bash
 # Navigate to project root
-cd "/Users/shubhamsaini/Desktop/Genai Project"
+
 
 # Create virtual environment
 python3 -m venv venv
