@@ -13,7 +13,7 @@ The Word plugin is an Office Add-in that provides a user-friendly interface to:
 
 #### 1. Start the Backend Server
 ```bash
-cd /Users/shubhamsaini/Desktop/Genai Project
+
 
 # Activate virtual environment
 source venv/bin/activate
