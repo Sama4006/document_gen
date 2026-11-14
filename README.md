@@ -1,210 +1,181 @@
-# Word Template + LLM + RAG Application
+# DocGen: Word templates + LLM + RAG
 
-A minimalist AI-powered Word document generation system using FastAPI, ChromaDB (RAG), and OpenAI LLM.
-
-## Architecture
+Generate Word documents with an LLM that is grounded in your own source
+material. A FastAPI backend handles retrieval (ChromaDB), generation (OpenAI)
+and `.docx` template filling; a Word add-in puts it all in a task pane.
 
 ```
-Frontend (Word Plugin)
-    ↓
-FastAPI Backend
-├── LLM Service (OpenAI GPT-4)
-├── RAG Service (ChromaDB + Vector Embeddings)
-└── Template Engine (Word Population)
-    ↓
-Generated & Populated Word Documents
+Word add-in (task pane)  ──►  FastAPI backend
+                               ├─ RAG service      chunk → embed → ChromaDB
+                               ├─ LLM service      OpenAI chat + embeddings
+                               └─ Template engine  {{PLACEHOLDER}} → .docx
 ```
 
-## Quick Start
+## Quick start
 
-### 1. Backend Setup
-
-#### Prerequisites
-- Python 3.8+
-- OpenAI API key ([Get here](https://platform.openai.com/api-keys))
-
-#### Installation
+Requires Python 3.10+ and an OpenAI API key.
 
 ```bash
-# Navigate to project root
-
-
-# Create virtual environment
 python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
+source venv/bin/activate            # Windows: venv\Scripts\activate
 pip install -r backend/requirements.txt
 
-# Setup environment variables
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+cp .env.example .env                # then put your key in OPENAI_API_KEY
+python run.py
 ```
 
-#### Run Server
+- API docs (Swagger): http://localhost:8000/docs
+- Task pane in a browser: http://localhost:8000/addin/taskpane.html
+
+Seven example templates are in `templates/`. Regenerate them with
+`python create_templates.py` and `python create_sample_template.py`.
+
+## How it works
+
+1. **Knowledge base.** Text, `.txt`, `.md`, `.docx` or `.pdf` files are split
+   into overlapping passages, embedded with the OpenAI embedding model and
+   stored in a local ChromaDB collection (`./chroma_data`).
+2. **Generation.** A prompt is embedded, the closest passages are retrieved
+   and passed to the chat model as context.
+3. **Templates.** Any `.docx` containing `{{PLACEHOLDER}}` tokens is a
+   template. The model returns one value per placeholder as JSON, and the
+   engine writes the values into the document, keeping the formatting of the
+   text around (and of) each token. Tokens in tables, text boxes, headers and
+   footers are handled, as are tokens Word has split across runs.
+
+## API
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | Liveness; reports a missing API key. No OpenAI call. |
+| GET | `/status` | Counts and config. `?check_llm=true` tests the OpenAI key. |
+| POST | `/ingest-document` | Add raw text to the knowledge base |
+| POST | `/ingest-document-file` | Add a `.txt` / `.md` / `.docx` / `.pdf` file (multipart) |
+| GET | `/documents` | List ingested documents |
+| DELETE | `/documents/{id}` | Remove a document |
+| POST | `/generate-content` | Free-form content with RAG context |
+| POST | `/fill-placeholders` | One generated value per placeholder name |
+| GET | `/templates` | Server templates and their placeholders |
+| POST | `/templates` | Upload a `.docx` template (multipart) |
+| POST | `/find-placeholders?template_path=…` | Placeholders in one template |
+| POST | `/populate-template` | Fill a template with values you supply |
+| POST | `/end-to-end-generation` | Prompt + template → finished document |
+| GET | `/download/{filename}` | Download a generated document |
+
+Examples:
 
 ```bash
-# From project root
-python -m uvicorn backend.main:app --reload
+# 1. Add source material
+curl -X POST localhost:8000/ingest-document -H 'Content-Type: application/json' \
+  -d '{"content": "Q1 revenue grew 18% to ₹4.2M…", "document_name": "Q1 finance"}'
 
-# Server will start at http://localhost:8000
-# API Docs available at http://localhost:8000/docs
+curl -X POST localhost:8000/ingest-document-file -F file=@report.pdf
+
+# 2. Prompt + template -> document
+curl -X POST localhost:8000/end-to-end-generation -H 'Content-Type: application/json' \
+  -d '{"prompt": "Write the Q1 business report",
+       "template_path": "report_template.docx",
+       "known_values": {"AUTHOR": "Satyam", "DATE": "14 Nov 2026"}}'
+
+# 3. Download the result (name comes from the previous response)
+curl -OJ localhost:8000/download/report_template_20261114_120000.docx
 ```
 
-### 2. API Endpoints
+Templates are addressed by file name inside `TEMPLATES_DIR`; generated files
+are written to `OUTPUT_DIR`. Paths outside those folders are not accepted.
 
-#### Health Check
+## Word add-in
+
+The backend serves the task pane itself at `/addin/`, so there is no second
+server to run. Word only loads add-ins over HTTPS, so create a trusted local
+certificate once (needs Node.js):
+
 ```bash
-GET /health
+npx office-addin-dev-certs install
+python run.py          # now starts on https://localhost:8000
 ```
 
-#### Ingest Document
+Then sideload `frontend/word-plugin/manifest.xml`:
+
+- **Word on the web:** Home → Add-ins → More Add-ins → My Add-ins → Upload My
+  Add-in → choose `manifest.xml`.
+- **Windows:** put `manifest.xml` in a shared folder, add that folder under
+  File → Options → Trust Center → Trust Center Settings → Trusted Add-in
+  Catalogs, restart Word, then Home → Add-ins → Shared Folder.
+- **Mac:** copy `manifest.xml` to
+  `~/Library/Containers/com.microsoft.Word/Data/Documents/wef/` and restart
+  Word.
+
+An **AI Generator** button appears on the Home tab. The pane has four tabs:
+
+- **Knowledge**: paste text, upload a file, or add the open document.
+- **Generate**: write content from a prompt and insert it at the cursor.
+- **Template**: find `{{PLACEHOLDER}}` tokens in the open document, fill them
+  by hand or with AI, and apply; or generate a whole document from a server
+  template and open it in Word.
+- **⚙**: backend URL and API key.
+
+To host it elsewhere, replace `https://localhost:8000` in `manifest.xml` with
+your server's HTTPS URL.
+
+## Configuration
+
+All settings live in `.env` (see `.env.example`).
+
+| Variable | Default | Notes |
+|---|---|---|
+| `OPENAI_API_KEY` | none | Required for generation and ingestion |
+| `OPENAI_MODEL` | `gpt-5.6-terra` | Any chat-completions model |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Changing it later requires re-ingesting |
+| `OPENAI_BASE_URL` | none | Other OpenAI-compatible endpoints |
+| `API_KEY` | none | If set, clients must send `X-API-Key` |
+| `CORS_ORIGINS` | `*` | Restrict in production |
+| `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1200` / `200` | Characters per passage |
+| `TEMPLATES_DIR` / `OUTPUT_DIR` | `./templates` / `./output` | |
+| `CHROMA_DB_PATH` | `./chroma_data` | Delete the folder to reset the knowledge base |
+
+## Tests
+
 ```bash
-POST /ingest-document
-Content-Type: application/json
-
-{
-  "content": "Your document text here",
-  "document_name": "example_doc",
-  "metadata": {"source": "user"}
-}
+pip install -r requirements-dev.txt
+python -m pytest
 ```
 
-#### Generate Content
+The tests replace OpenAI with fakes, so they need no key and no network.
+
+## Docker
+
 ```bash
-POST /generate-content
-Content-Type: application/json
-
-{
-  "prompt": "Write an executive summary",
-  "context_retrieval_k": 3,
-  "template_placeholders": ["SUMMARY", "KEY_POINTS"]
-}
+docker compose up --build
 ```
 
-#### Populate Word Template
-```bash
-POST /populate-template
-Content-Type: application/json
+Data (vector store and generated files) is kept in the `docgen-data` volume.
 
-{
-  "template_path": "./templates/sample_template.docx",
-  "placeholders_data": {
-    "TITLE": "My Document",
-    "SUMMARY": "Generated summary here",
-    "DATE": "2026-06-26"
-  },
-  "output_path": "./output/final_document.docx"
-}
-```
-
-#### End-to-End Workflow
-```bash
-POST /end-to-end-generation?prompt=Write+a+report&template_path=./templates/sample_template.docx
-```
-
-### 3. Template Format
-
-Templates use `{{PLACEHOLDER_NAME}}` format:
+## Project layout
 
 ```
-Document Title: {{TITLE}}
-
-Summary: {{SUMMARY}}
-
-Key Points: {{KEY_POINTS}}
-
-Date: {{DATE}}
+backend/
+  main.py                  FastAPI app and routes
+  config.py                Settings from .env
+  models/schemas.py        Request/response models
+  services/
+    llm_service.py         OpenAI chat + embeddings
+    rag_service.py         Chunking, ChromaDB storage, retrieval
+    document_loader.py     Text extraction (.txt/.md/.docx/.pdf)
+    template_engine.py     Placeholder search and replacement
+frontend/word-plugin/      Task pane (HTML/CSS/JS), manifest, icons
+templates/                 Example .docx templates
+tests/                     pytest suite
+run.py                     Starts the server (HTTPS if certificates exist)
 ```
-
-## Folder Structure
-
-```
-Genai Project/
-├── backend/
-│   ├── main.py                 # FastAPI app
-│   ├── config.py              # Configuration
-│   ├── requirements.txt        # Dependencies
-│   ├── services/
-│   │   ├── llm_service.py     # OpenAI integration
-│   │   ├── rag_service.py     # ChromaDB RAG
-│   │   └── template_engine.py # Word population
-│   ├── models/
-│   │   └── schemas.py         # Pydantic models
-│   └── __init__.py
-├── frontend/
-│   └── word-plugin/           # Office Add-in (coming next)
-├── templates/
-│   └── sample_template.docx   # Example template
-├── .env.example               # Configuration template
-└── README.md                  # This file
-```
-
-## Key Features
-
-### 1. **LLM Service** (OpenAI Integration)
-- Content generation with context awareness
-- Text embedding support
-- Temperature & token control
-
-### 2. **RAG Service** (ChromaDB)
-- Document ingestion and storage
-- Vector similarity search
-- Semantic context retrieval
-- Metadata support
-
-### 3. **Template Engine** (Word Population)
-- Placeholder detection in .docx files
-- Smart text replacement
-- Formatting preservation
-- Batch operations
-
-## Next Steps
-
-1. **Test Backend**
-   - Use Swagger UI at http://localhost:8000/docs
-   - Upload documents and generate content
-
-2. **Build Word Plugin**
-   - Create Office Add-in UI
-   - Connect to FastAPI backend
-   - Provide user-friendly interface
-
-3. **Deploy**
-   - Package backend (Docker)
-   - Deploy Word plugin to Microsoft AppSource
-   - Setup production infrastructure
 
 ## Troubleshooting
 
-### "OpenAI API Key Invalid"
-- Verify key in .env file
-- Check key has correct permissions
-- Generate new key if needed
-
-### ChromaDB Errors
-- Clear `./chroma_data` directory
-- Restart server
-- Check disk space
-
-### Template Placeholders Not Found
-- Verify placeholder format: `{{NAME}}`
-- Check if placeholders are in separate runs in Word
-- Use `/find-placeholders` endpoint to debug
-
-## Development Notes
-
-- **LLM Selection**: Currently using gpt-4, can switch to gpt-4-turbo or gpt-3.5-turbo
-- **Vector DB**: ChromaDB chosen for zero-setup MVP (no external DB needed)
-- **Embeddings**: OpenAI text-embedding-3-small (efficient & accurate)
-
-## Future Enhancements
-
-- [ ] PDF document support
-- [ ] Custom prompt templates
-- [ ] Multi-document RAG chains
-- [ ] Word plugin UI
-- [ ] Document history/versioning
-- [ ] Webhook support for async operations
-- [ ] Rate limiting & authentication
-- [ ] Prompt caching for cost reduction
+- **"OPENAI_API_KEY is not set"**: add the key to `.env` and restart.
+- **"OpenAI error: …model…"**: your key cannot use `OPENAI_MODEL`; set a
+  model that it can.
+- **Add-in pane is blank in Word**: the server is not on HTTPS, or the
+  certificate is not trusted. Re-run `npx office-addin-dev-certs install`.
+- **Scanned PDF gives "No text could be extracted"**: it has no text layer;
+  run OCR first.
+- **Changed the embedding model**: delete `chroma_data/` and ingest again.
