@@ -1,0 +1,20 @@
+services:
+  docgen:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      CHROMA_DB_PATH: /data/chroma
+      OUTPUT_DIR: /data/output
+    volumes:
+      - docgen-data:/data
+      - ./templates:/app/templates
+      # For HTTPS (needed by Word), mount certificates and point to them:
+      # - ~/.office-addin-dev-certs:/certs:ro
+    # environment:
+    #   SSL_CERTFILE: /certs/localhost.crt
+    #   SSL_KEYFILE: /certs/localhost.key
+
+volumes:
+  docgen-data:

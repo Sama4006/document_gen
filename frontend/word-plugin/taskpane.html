@@ -1,161 +1,124 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AI Document Generator</title>
     <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
     <link rel="stylesheet" href="taskpane.css" />
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>📄 AI Document Generator</h1>
-            <p class="subtitle">Powered by LLM + RAG</p>
+<div class="container">
+    <header class="header">
+        <h1>AI Document Generator</h1>
+        <span id="connection" class="connection" title="Backend status">checking…</span>
+    </header>
+
+    <nav class="tabs" role="tablist">
+        <button class="tab-button active" data-tab="knowledge" role="tab">Knowledge</button>
+        <button class="tab-button" data-tab="generate" role="tab">Generate</button>
+        <button class="tab-button" data-tab="template" role="tab">Template</button>
+        <button class="tab-button" data-tab="settings" role="tab" title="Settings">⚙</button>
+    </nav>
+
+    <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
+
+    <!-- ============ Knowledge base ============ -->
+    <section id="knowledge" class="tab-content active">
+        <p class="help-text">Add source material. Generated content is grounded in what you add here.</p>
+
+        <label for="docName">Name</label>
+        <input type="text" id="docName" placeholder="e.g. Q1 2026 company report" />
+
+        <label for="docContent">Text</label>
+        <textarea id="docContent" rows="6" placeholder="Paste text here…"></textarea>
+        <button id="btnIngestText" class="btn btn-primary">Add text</button>
+
+        <div class="row">
+            <button id="btnIngestDocument" class="btn" data-needs-word>Add this Word document</button>
+            <button id="btnIngestFile" class="btn">Upload file…</button>
+            <input type="file" id="fileInput" accept=".txt,.md,.docx,.pdf" hidden />
         </div>
+        <p class="hint">Files: .txt, .md, .docx, .pdf</p>
 
-        <!-- Status Message -->
-        <div id="statusMessage" class="status-message hidden"></div>
+        <h2>In the knowledge base <button id="btnRefreshDocs" class="link">refresh</button></h2>
+        <ul id="docList" class="list"><li class="empty">Nothing yet.</li></ul>
+    </section>
 
-        <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab-button active" onclick="switchTab('ingest')">📤 Upload Document</button>
-            <button class="tab-button" onclick="switchTab('generate')">✨ Generate Content</button>
-            <button class="tab-button" onclick="switchTab('populate')">📋 Populate Template</button>
-        </div>
+    <!-- ============ Generate ============ -->
+    <section id="generate" class="tab-content">
+        <p class="help-text">Write new content using the knowledge base as context.</p>
 
-        <!-- Tab 1: Ingest Document -->
-        <div id="ingest" class="tab-content active">
-            <h2>Step 1: Ingest Document</h2>
-            <p class="help-text">Upload a document to the AI knowledge base for context-aware generation.</p>
-            
-            <div class="form-group">
-                <label for="docName">Document Name:</label>
-                <input 
-                    type="text" 
-                    id="docName" 
-                    placeholder="e.g., Company Reports Q1 2026"
-                    class="input-field"
-                />
-            </div>
+        <label for="prompt">What should be written?</label>
+        <textarea id="prompt" rows="5" placeholder="e.g. Write an executive summary of the Q1 results"></textarea>
 
-            <div class="form-group">
-                <label for="docContent">Document Content:</label>
-                <textarea 
-                    id="docContent" 
-                    placeholder="Paste or type your document content here..."
-                    class="textarea-field"
-                    rows="8"
-                ></textarea>
-            </div>
+        <label for="retrievalK">Context passages to use</label>
+        <input type="number" id="retrievalK" value="3" min="0" max="20" />
 
-            <button onclick="ingestDocument()" class="btn btn-primary">
-                📤 Upload to Knowledge Base
-            </button>
+        <button id="btnGenerate" class="btn btn-primary">Generate</button>
 
-            <div id="ingestResult" class="result-box hidden"></div>
-        </div>
-
-        <!-- Tab 2: Generate Content -->
-        <div id="generate" class="tab-content">
-            <h2>Step 2: Generate Content</h2>
-            <p class="help-text">Generate content based on your prompt using the ingested documents.</p>
-            
-            <div class="form-group">
-                <label for="prompt">Your Prompt/Request:</label>
-                <textarea 
-                    id="prompt" 
-                    placeholder="e.g., Write an executive summary based on the Q1 reports..."
-                    class="textarea-field"
-                    rows="6"
-                ></textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="retrievalK">Number of Context Documents to Retrieve:</label>
-                <input 
-                    type="number" 
-                    id="retrievalK" 
-                    value="3"
-                    min="1"
-                    max="10"
-                    class="input-field"
-                />
-            </div>
-
-            <button onclick="generateContent()" class="btn btn-primary">
-                ✨ Generate Content
-            </button>
-
-            <div id="generateResult" class="result-box hidden">
-                <h3>Generated Content:</h3>
-                <div id="generatedText" class="generated-text"></div>
-                <button onclick="copyGenerated()" class="btn btn-secondary btn-small">
-                    📋 Copy to Clipboard
-                </button>
+        <div id="generateResult" class="result-box" hidden>
+            <div id="generatedText" class="generated-text"></div>
+            <p id="generatedSources" class="hint"></p>
+            <div class="row">
+                <button id="btnInsert" class="btn btn-primary" data-needs-word>Insert at cursor</button>
+                <button id="btnCopy" class="btn">Copy</button>
             </div>
         </div>
+    </section>
 
-        <!-- Tab 3: Populate Template -->
-        <div id="populate" class="tab-content">
-            <h2>Step 3: Populate Template</h2>
-            <p class="help-text">Auto-detect placeholders in the current document and fill them.</p>
-            
-            <div class="info-box">
-                <strong>ℹ️ Template Format:</strong> Use {{PLACEHOLDER_NAME}} in your Word document
-            </div>
+    <!-- ============ Template ============ -->
+    <section id="template" class="tab-content">
+        <h2>Fill this document</h2>
+        <p class="help-text">Finds <code>{{PLACEHOLDER}}</code> tokens in the open document and replaces them.</p>
+        <button id="btnScan" class="btn btn-primary" data-needs-word>Find placeholders</button>
 
-            <div class="form-group">
-                <button onclick="findPlaceholders()" class="btn btn-secondary btn-block">
-                    🔍 Find Placeholders in Current Document
-                </button>
-            </div>
+        <div id="placeholderPanel" hidden>
+            <label for="fillPrompt">Describe the document (for AI fill)</label>
+            <textarea id="fillPrompt" rows="3" placeholder="e.g. Q1 2026 sales report for the leadership team"></textarea>
+            <button id="btnAiFill" class="btn">Fill empty fields with AI</button>
 
-            <div id="placeholdersList" class="placeholders-list hidden">
-                <h3>Found Placeholders:</h3>
-                <div id="placeholdersContainer"></div>
-            </div>
-
-            <div id="placeholdersForm" class="form-group hidden">
-                <h3>Fill Placeholders:</h3>
-                <div id="placeholderInputs"></div>
-                
-                <button onclick="populateTemplate()" class="btn btn-primary btn-block">
-                    📋 Populate Document
-                </button>
-            </div>
-
-            <div id="populateResult" class="result-box hidden"></div>
+            <div id="placeholderInputs"></div>
+            <button id="btnApply" class="btn btn-primary" data-needs-word>Apply to document</button>
         </div>
 
-        <!-- Advanced Options -->
-        <div class="advanced-section">
-            <details>
-                <summary>⚙️ Settings</summary>
-                <div class="settings-content">
-                    <div class="form-group">
-                        <label for="backendUrl">Backend URL:</label>
-                        <input 
-                            type="text" 
-                            id="backendUrl" 
-                            value="http://localhost:8000"
-                            class="input-field"
-                        />
-                        <button onclick="testConnection()" class="btn btn-secondary btn-small">
-                            🔗 Test Connection
-                        </button>
-                    </div>
-                </div>
-            </details>
-        </div>
+        <hr />
 
-        <!-- Footer -->
-        <div class="footer">
-            <p>v1.0 | Built with ❤️ for Word</p>
+        <h2>Generate from a server template</h2>
+        <p class="help-text">Pick a template, describe the document, get a finished .docx.</p>
+        <label for="templateSelect">Template</label>
+        <div class="row">
+            <select id="templateSelect"></select>
+            <button id="btnUploadTemplate" class="btn" title="Upload a .docx template">Upload…</button>
+            <input type="file" id="templateInput" accept=".docx" hidden />
         </div>
-    </div>
+        <p id="templateFields" class="hint"></p>
 
-    <script src="office.js"></script>
-    <script src="taskpane.js"></script>
+        <label for="e2ePrompt">Describe the document</label>
+        <textarea id="e2ePrompt" rows="3" placeholder="e.g. Proposal for redesigning Acme's website, 3 phases"></textarea>
+        <button id="btnE2E" class="btn btn-primary">Generate document</button>
+
+        <div id="e2eResult" class="result-box" hidden>
+            <p id="e2eSummary"></p>
+            <div class="row">
+                <button id="btnOpenDoc" class="btn btn-primary" data-needs-word>Open in Word</button>
+                <button id="btnDownloadDoc" class="btn">Download</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ Settings ============ -->
+    <section id="settings" class="tab-content">
+        <label for="backendUrl">Backend URL</label>
+        <input type="text" id="backendUrl" />
+        <label for="apiKey">API key <span class="hint">(only if the server sets API_KEY)</span></label>
+        <input type="password" id="apiKey" autocomplete="off" />
+        <button id="btnSaveSettings" class="btn btn-primary">Save and test connection</button>
+        <pre id="statusDump" class="generated-text" hidden></pre>
+    </section>
+</div>
+
+<script src="common.js"></script>
+<script src="taskpane.js"></script>
 </body>
 </html>

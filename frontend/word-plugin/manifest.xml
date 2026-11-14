@@ -1,55 +1,90 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1" 
-           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+<!--
+  Word add-in manifest for local use. The task pane is served by the FastAPI
+  backend over HTTPS at https://localhost:8000/addin/ (see README, "Word add-in").
+  To deploy elsewhere, replace every https://localhost:8000 with your server URL.
+-->
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
            xsi:type="TaskPaneApp">
-  <Id>12345678-1234-1234-1234-123456789012</Id>
-  <Version>1.0.0.0</Version>
-  <ProviderName>AI Document Generator</ProviderName>
+  <Id>de22b5a9-e680-4d13-b600-206d35d92847</Id>
+  <Version>2.0.0.0</Version>
+  <ProviderName>DocGen</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="AI Document Generator"/>
-  <Description DefaultValue="Generate and populate Word documents using AI and RAG"/>
-  
+  <Description DefaultValue="Generate content and fill Word templates using an LLM grounded in your own documents."/>
+  <IconUrl DefaultValue="https://localhost:8000/addin/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:8000/addin/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://github.com/Sama4006/document_gen"/>
+  <AppDomains>
+    <AppDomain>https://localhost:8000</AppDomain>
+  </AppDomains>
   <Hosts>
     <Host Name="Document"/>
   </Hosts>
-  
+  <Requirements>
+    <Sets DefaultMinVersion="1.3">
+      <Set Name="WordApi" MinVersion="1.3"/>
+    </Sets>
+  </Requirements>
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://yourserver.com/taskpane.html"/>
+    <SourceLocation DefaultValue="https://localhost:8000/addin/taskpane.html"/>
   </DefaultSettings>
-  
   <Permissions>ReadWriteDocument</Permissions>
-  
-  <ExtensionPoint xsi:type="PrimaryCommandSurface">
-    <OfficeMenu id="OfficeAppMenu">
-      <Button id="TaskPaneButton">
-        <Label resid="TaskPaneButton.Label"/>
-        <Supertip>
-          <Title resid="TaskPaneButton.Label"/>
-          <Description resid="TaskPaneButton.Tooltip"/>
-        </Supertip>
-        <Action xsi:type="ShowTaskPane">
-          <TaskpaneId>ButtonId1</TaskpaneId>
-          <SourceLocation resid="Taskpane.Url"/>
-        </Action>
-      </Button>
-    </OfficeMenu>
-  </ExtensionPoint>
-  
-  <Resources>
-    <bt:Images>
-      <bt:Image id="icon16" DefaultValue="https://yourserver.com/assets/icon-16.png"/>
-      <bt:Image id="icon32" DefaultValue="https://yourserver.com/assets/icon-32.png"/>
-      <bt:Image id="icon80" DefaultValue="https://yourserver.com/assets/icon-80.png"/>
-    </bt:Images>
-    <bt:Urls>
-      <bt:Url id="Taskpane.Url" DefaultValue="https://yourserver.com/taskpane.html"/>
-      <bt:Url id="Commands.Url" DefaultValue="https://yourserver.com/commands.html"/>
-    </bt:Urls>
-    <bt:ShortStrings>
-      <bt:String id="TaskPaneButton.Label" DefaultValue="AI Generator"/>
-    </bt:ShortStrings>
-    <bt:LongStrings>
-      <bt:String id="TaskPaneButton.Tooltip" DefaultValue="Generate and populate Word documents with AI"/>
-    </bt:LongStrings>
-  </Resources>
+
+  <!-- Adds an "AI Generator" button to the Home tab. -->
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="DocGen.Group">
+                <Label resid="DocGen.GroupLabel"/>
+                <Icon>
+                  <bt:Image size="16" resid="DocGen.Icon16"/>
+                  <bt:Image size="32" resid="DocGen.Icon32"/>
+                  <bt:Image size="80" resid="DocGen.Icon80"/>
+                </Icon>
+                <Control xsi:type="Button" id="DocGen.TaskpaneButton">
+                  <Label resid="DocGen.ButtonLabel"/>
+                  <Supertip>
+                    <Title resid="DocGen.ButtonLabel"/>
+                    <Description resid="DocGen.ButtonTooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="DocGen.Icon16"/>
+                    <bt:Image size="32" resid="DocGen.Icon32"/>
+                    <bt:Image size="80" resid="DocGen.Icon80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>DocGen.Taskpane</TaskpaneId>
+                    <SourceLocation resid="DocGen.TaskpaneUrl"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="DocGen.Icon16" DefaultValue="https://localhost:8000/addin/assets/icon-16.png"/>
+        <bt:Image id="DocGen.Icon32" DefaultValue="https://localhost:8000/addin/assets/icon-32.png"/>
+        <bt:Image id="DocGen.Icon80" DefaultValue="https://localhost:8000/addin/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="DocGen.TaskpaneUrl" DefaultValue="https://localhost:8000/addin/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="DocGen.GroupLabel" DefaultValue="DocGen"/>
+        <bt:String id="DocGen.ButtonLabel" DefaultValue="AI Generator"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="DocGen.ButtonTooltip" DefaultValue="Generate content and fill templates with AI"/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
 </OfficeApp>

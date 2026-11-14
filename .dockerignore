@@ -1,0 +1,9 @@
+.git
+.env
+venv
+.venv
+__pycache__
+chroma_data
+output
+tests
+*.md

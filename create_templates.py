@@ -313,6 +313,9 @@ def create_memo_template():
 
 
 if __name__ == "__main__":
+    # Always write next to this script, whatever the current directory is.
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    os.makedirs("templates", exist_ok=True)
     print("Creating sample Word templates...\n")
     
     try:
