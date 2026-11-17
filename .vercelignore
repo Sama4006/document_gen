@@ -1,0 +1,8 @@
+.env
+venv
+.venv
+chroma_data
+output
+server.log
+__pycache__
+*.pyc

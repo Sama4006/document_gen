@@ -1,10 +1,22 @@
 """LLM service: all OpenAI API calls (chat + embeddings)."""
 
 import json
+import logging
 import re
 from typing import Dict, List, Optional
 
 from backend.config import settings
+
+logger = logging.getLogger("docgen.llm")
+
+# Errors after which the next fallback model is tried.
+_RETRY_WITH_NEXT_MODEL = {
+    "NotFoundError",          # model unknown / not available to this key
+    "RateLimitError",         # 429: quota or rate limit
+    "InternalServerError",    # 5xx: overloaded or unavailable
+    "APITimeoutError",
+    "APIConnectionError",
+}
 
 SYSTEM_PROMPT = (
     "You are a professional document generation assistant. Write clear, "
@@ -29,6 +41,22 @@ class LLMNotConfigured(RuntimeError):
     """Raised when an LLM call is attempted without an API key."""
 
 
+class LLMModelNotFound(RuntimeError):
+    """Raised when the API does not know the configured model name."""
+
+
+class LLMUnavailable(RuntimeError):
+    """Raised when every configured chat model failed."""
+
+
+def _model_not_found(setting: str, model: str) -> LLMModelNotFound:
+    return LLMModelNotFound(
+        f"The model '{model}' is not available for this API key. "
+        f"Set {setting} in .env to a model your key can use "
+        "(GET /models lists them)."
+    )
+
+
 class LLMService:
     def __init__(self):
         self._client = None
@@ -50,15 +78,45 @@ class LLMService:
             self._client = OpenAI(
                 api_key=settings.openai_api_key,
                 base_url=settings.openai_base_url or None,
+                timeout=settings.openai_timeout,
+                max_retries=1,
             )
         return self._client
 
     # ------------------------------------------------------------------ chat
     def _chat(self, system: str, user: str, json_mode: bool = False) -> str:
+        """Call the main model, falling back to OPENAI_FALLBACK_MODELS in order
+        when a model is busy, rate-limited or unavailable."""
+        models = settings.chat_models
+        failures = []
+        for index, model in enumerate(models):
+            try:
+                return self._chat_once(system, user, json_mode, model)
+            except Exception as exc:
+                kind = type(exc).__name__
+                if kind not in _RETRY_WITH_NEXT_MODEL:
+                    raise
+                failures.append((model, kind, exc))
+                if index + 1 < len(models):
+                    logger.warning("%s failed (%s); trying %s", model, kind, models[index + 1])
+                    continue
+                if len(models) == 1 and kind == "NotFoundError":
+                    raise _model_not_found("OPENAI_MODEL", model) from exc
+                if len(models) == 1:
+                    raise
+                summary = "; ".join(f"{m}: {k}" for m, k, _ in failures)
+                raise LLMUnavailable(
+                    f"All configured models failed ({summary}). The provider may be "
+                    "busy or your quota used up; try again shortly, or change "
+                    "OPENAI_MODEL / OPENAI_FALLBACK_MODELS in .env."
+                ) from exc
+        raise LLMUnavailable("No chat model is configured (OPENAI_MODEL).")
+
+    def _chat_once(self, system: str, user: str, json_mode: bool, model: str) -> str:
         from openai import BadRequestError
 
         params = {
-            "model": settings.openai_model,
+            "model": model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -159,18 +217,41 @@ class LLMService:
         return str(value)
 
     # ------------------------------------------------------------ embeddings
-    def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def get_embeddings(
+        self, texts: List[str], dimensions: Optional[int] = None
+    ) -> List[List[float]]:
+        """Embed texts. `dimensions` asks the model for shorter vectors; models
+        that do not accept the option return full-length ones."""
+        from openai import BadRequestError
+
         vectors: List[List[float]] = []
         for start in range(0, len(texts), 96):
             batch = texts[start : start + 96]
-            response = self.client.embeddings.create(
-                model=settings.openai_embedding_model, input=batch
-            )
+            params = {"model": settings.openai_embedding_model, "input": batch}
+            if dimensions:
+                params["dimensions"] = dimensions
+            try:
+                try:
+                    response = self.client.embeddings.create(**params)
+                except BadRequestError as exc:
+                    if "dimensions" not in params or "dimension" not in str(exc).lower():
+                        raise
+                    params.pop("dimensions")  # caller shortens the vectors instead
+                    response = self.client.embeddings.create(**params)
+            except Exception as exc:
+                if type(exc).__name__ == "NotFoundError":
+                    raise _model_not_found(
+                        "OPENAI_EMBEDDING_MODEL", settings.openai_embedding_model
+                    ) from exc
+                raise
             vectors.extend(item.embedding for item in response.data)
         return vectors
 
     def get_embedding(self, text: str) -> List[float]:
         return self.get_embeddings([text])[0]
+
+    def list_models(self) -> List[str]:
+        return sorted(model.id for model in self.client.models.list())
 
 
 llm_service = LLMService()

@@ -21,8 +21,11 @@ source venv/bin/activate            # Windows: venv\Scripts\activate
 pip install -r backend/requirements.txt
 
 cp .env.example .env                # then put your key in OPENAI_API_KEY
-python run.py
+python run.py                       # or, on a Mac, double-click start_server.command
 ```
+
+`RELOAD=1 python run.py` restarts the server automatically when the code or
+`.env` changes.
 
 - API docs (Swagger): http://localhost:8000/docs
 - Task pane in a browser: http://localhost:8000/addin/taskpane.html
@@ -118,6 +121,52 @@ An **AI Generator** button appears on the Home tab. The pane has four tabs:
 To host it elsewhere, replace `https://localhost:8000` in `manifest.xml` with
 your server's HTTPS URL.
 
+## Deploy to Vercel
+
+The app runs on Vercel as a single Python function. Vercel's disk is wiped
+between requests, so the knowledge base lives in **Upstash Vector** there
+(free tier available), and generated documents are returned directly in the
+API response.
+
+1. **Import the repository** in Vercel (Add New → Project → pick this repo).
+   `pyproject.toml` and `vercel.json` already configure it; no build settings
+   need changing.
+2. **Add Upstash Vector**: in the Vercel project open *Storage* (or the
+   Marketplace), add **Upstash → Vector**, and create an index with
+   **dimension 1536** and metric **COSINE**. Connecting it to the project
+   adds `UPSTASH_VECTOR_REST_URL` and `UPSTASH_VECTOR_REST_TOKEN`. If you
+   create the index on upstash.com instead, add those two variables yourself.
+3. **Add environment variables** (Settings → Environment Variables), the same
+   values as your `.env`:
+
+   | Variable | Example |
+   |---|---|
+   | `OPENAI_API_KEY` | your Gemini or OpenAI key |
+   | `OPENAI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai/` (Gemini) |
+   | `OPENAI_MODEL` | `gemini-3.8-flash` |
+   | `OPENAI_FALLBACK_MODELS` | `gemini-3.1-flash-lite,gemini-flash-latest` |
+   | `OPENAI_EMBEDDING_MODEL` | `gemini-embedding-001` |
+   | `MAX_OUTPUT_TOKENS` | `8000` |
+   | `API_KEY` | any long random string (strongly recommended, see below) |
+
+4. **Redeploy** so the variables take effect, then open
+   `https://<your-app>.vercel.app/status?check_llm=true`.
+
+**Protect it.** A public deployment spends your API quota for anyone who finds
+the URL. Set `API_KEY`, then enter the same value in the add-in's ⚙ tab (or
+send it as the `X-API-Key` header).
+
+**Word add-in from Vercel.** Vercel serves HTTPS, so no certificates are
+needed: download `https://<your-app>.vercel.app/addin/manifest.xml` (it is
+generated with your deployment's address) and sideload it as described above.
+
+**On Vercel:**
+- Templates uploaded through the API or the add-in are temporary. To keep a
+  template, add it to the `templates/` folder in the repository.
+- The embedding size is matched to the Upstash index automatically. If you
+  change the embedding model later, create a new index (or reset it) and
+  re-ingest your documents.
+
 ## Configuration
 
 All settings live in `.env` (see `.env.example`).
@@ -133,6 +182,9 @@ All settings live in `.env` (see `.env.example`).
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1200` / `200` | Characters per passage |
 | `TEMPLATES_DIR` / `OUTPUT_DIR` | `./templates` / `./output` | |
 | `CHROMA_DB_PATH` | `./chroma_data` | Delete the folder to reset the knowledge base |
+| `UPSTASH_VECTOR_REST_URL` / `_TOKEN` | none | If set, the knowledge base is stored in Upstash Vector instead of ChromaDB |
+| `OPENAI_FALLBACK_MODELS` | none | Models tried in order when the main one is busy or unavailable |
+| `OPENAI_TIMEOUT` | `60` | Seconds to wait for one API response |
 
 ## Tests
 

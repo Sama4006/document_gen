@@ -95,3 +95,87 @@ def test_embeddings_are_batched(monkeypatch):
     service = make_service(handler, monkeypatch)
     vectors = service.get_embeddings([f"t{i}" for i in range(200)])
     assert sizes == [96, 96, 8] and len(vectors) == 200 and vectors[97] == [1.0, 1.0]
+
+
+def test_unknown_model_gives_a_clear_error(monkeypatch):
+    from backend.services.llm_service import LLMModelNotFound
+
+    def handler(request):
+        return httpx.Response(404, json={"error": {"message": "models/x is not found", "code": 404}})
+
+    service = make_service(handler, monkeypatch)
+    with pytest.raises(LLMModelNotFound, match="OPENAI_MODEL"):
+        service.generate_content("hi")
+    with pytest.raises(LLMModelNotFound, match="OPENAI_EMBEDDING_MODEL"):
+        service.get_embeddings(["hi"])
+
+
+def test_list_models(monkeypatch):
+    def handler(request):
+        return httpx.Response(200, json={"object": "list", "data": [
+            {"id": "b-model", "object": "model", "created": 0, "owned_by": "x"},
+            {"id": "a-model", "object": "model", "created": 0, "owned_by": "x"}]})
+
+    service = make_service(handler, monkeypatch)
+    assert service.list_models() == ["a-model", "b-model"]
+
+
+def test_falls_back_to_next_model_when_busy(monkeypatch):
+    seen = []
+
+    def handler(request):
+        model = json.loads(request.content)["model"]
+        seen.append(model)
+        if model == "main":
+            return httpx.Response(503, json={"error": {"message": "overloaded", "code": 503}})
+        if model == "second":
+            return httpx.Response(429, json={"error": {"message": "quota", "code": 429}})
+        return completion(f"from {model}")
+
+    monkeypatch.setattr(settings, "openai_model", "main")
+    monkeypatch.setattr(settings, "openai_fallback_models", "second, third")
+    service = make_service(handler, monkeypatch)
+    assert service.generate_content("hi") == "from third"
+    assert seen == ["main", "second", "third"]
+
+
+def test_all_models_failing_is_a_clear_error(monkeypatch):
+    from backend.services.llm_service import LLMUnavailable
+
+    monkeypatch.setattr(settings, "openai_model", "main")
+    monkeypatch.setattr(settings, "openai_fallback_models", "second")
+    service = make_service(lambda r: httpx.Response(503, json={"error": {"message": "x"}}), monkeypatch)
+    with pytest.raises(LLMUnavailable, match="main: InternalServerError; second: InternalServerError"):
+        service.generate_content("hi")
+
+
+def test_bad_request_is_not_retried_on_other_models(monkeypatch):
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content)["model"])
+        return httpx.Response(400, json={"error": {"message": "invalid prompt"}})
+
+    monkeypatch.setattr(settings, "openai_model", "main")
+    monkeypatch.setattr(settings, "openai_fallback_models", "second")
+    service = make_service(handler, monkeypatch)
+    with pytest.raises(Exception):
+        service.generate_content("hi")
+    assert seen == ["main"]
+
+
+def test_embeddings_request_dimensions_and_fall_back(monkeypatch):
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append(body.get("dimensions"))
+        if "dimensions" in body:
+            return httpx.Response(400, json={"error": {"message": "Unknown parameter: dimensions"}})
+        return httpx.Response(200, json={
+            "object": "list", "model": "e", "usage": {"prompt_tokens": 0, "total_tokens": 0},
+            "data": [{"object": "embedding", "index": 0, "embedding": [1.0, 0.0, 0.0]}]})
+
+    service = make_service(handler, monkeypatch)
+    assert service.get_embeddings(["x"], dimensions=2) == [[1.0, 0.0, 0.0]]
+    assert seen == [2, None]

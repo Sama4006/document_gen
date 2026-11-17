@@ -200,3 +200,24 @@ def test_api_key_protection(client, monkeypatch):
 def test_addin_is_served(client):
     response = client.get("/addin/taskpane.html")
     assert response.status_code == 200 and "office.js" in response.text
+
+
+def test_dotenv_wins_over_shell_environment(tmp_path, monkeypatch):
+    from backend.config import Settings
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("OPENAI_BASE_URL=https://example.test/v1\nOPENAI_MODEL=from-file\n")
+    monkeypatch.setenv("OPENAI_BASE_URL", "")
+    monkeypatch.setenv("OPENAI_MODEL", "from-shell")
+    monkeypatch.setenv("SERVER_PORT", "9999")
+    loaded = Settings(_env_file=str(env_file))
+    assert loaded.openai_base_url == "https://example.test/v1"
+    assert loaded.openai_model == "from-file"
+    assert loaded.server_port == 9999  # shell still applies when .env is silent
+
+
+def test_status_reports_endpoint_and_start_time(client, monkeypatch):
+    monkeypatch.setattr(settings, "openai_base_url", "https://example.test/v1")
+    body = client.get("/status").json()
+    assert body["config"]["api_endpoint"] == "https://example.test/v1"
+    assert body["started_at"]

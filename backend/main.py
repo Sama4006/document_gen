@@ -5,15 +5,16 @@ python-docx calls are blocking, so FastAPI runs them in its thread pool
 instead of stalling the event loop.
 """
 
+import base64
 import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import PROJECT_ROOT, settings
@@ -30,7 +31,12 @@ from backend.models.schemas import (
     TemplatePopulationRequest,
 )
 from backend.services import document_loader
-from backend.services.llm_service import LLMNotConfigured, llm_service
+from backend.services.llm_service import (
+    LLMModelNotFound,
+    LLMNotConfigured,
+    LLMUnavailable,
+    llm_service,
+)
 from backend.services.rag_service import rag_service
 from backend.services.template_engine import template_engine
 
@@ -38,6 +44,7 @@ logger = logging.getLogger("docgen")
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 ADDIN_DIR = PROJECT_ROOT / "frontend" / "word-plugin"
+STARTED_AT = datetime.now().isoformat(timespec="seconds")
 
 
 def require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
@@ -70,6 +77,16 @@ protected = [Depends(require_api_key)]
 
 @app.exception_handler(LLMNotConfigured)
 def _llm_not_configured(_, exc: LLMNotConfigured):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(LLMModelNotFound)
+def _model_not_found(_, exc: LLMModelNotFound):
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+@app.exception_handler(LLMUnavailable)
+def _llm_unavailable(_, exc: LLMUnavailable):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
@@ -132,12 +149,16 @@ def get_status(check_llm: bool = False):
     status = {
         "status": "running",
         "timestamp": datetime.now().isoformat(),
+        "started_at": STARTED_AT,
         "rag_stats": rag_service.get_collection_stats(),
         "templates": len(template_engine.list_templates()),
         "config": {
+            "api_endpoint": settings.openai_base_url or "https://api.openai.com/v1 (OpenAI default)",
             "model": settings.openai_model,
+            "fallback_models": settings.chat_models[1:],
             "embedding_model": settings.openai_embedding_model,
             "collection": settings.collection_name,
+            "vector_store": rag_service.backend,
             "llm_configured": llm_service.configured,
         },
     }
@@ -148,6 +169,18 @@ def get_status(check_llm: bool = False):
         except Exception as exc:
             status["llm_check"] = f"failed: {exc}"
     return status
+
+
+@app.get("/models", dependencies=protected)
+def list_models():
+    """Model names the configured API key can use."""
+    models = llm_service.list_models()
+    return {
+        "configured_model": settings.openai_model,
+        "configured_embedding_model": settings.openai_embedding_model,
+        "count": len(models),
+        "models": models,
+    }
 
 
 # ==================== Knowledge base ====================
@@ -304,6 +337,9 @@ def _populate(template_name: str, data: dict, output_name: Optional[str]) -> dic
         "download_url": f"/download/{output.name}",
         "placeholders_filled": report["filled"],
         "placeholders_missing": report["missing"],
+        # The file itself, so clients never depend on a second request finding
+        # it (serverless hosts may answer that request from another instance).
+        "document_base64": base64.b64encode(output.read_bytes()).decode("ascii"),
         "message": "Template populated successfully",
     }
 
@@ -356,6 +392,25 @@ def end_to_end_generation(request: EndToEndRequest):
 
 
 # ==================== Word add-in (static files) ====================
+
+@app.get("/addin/manifest.xml", include_in_schema=False)
+def addin_manifest(request: Request):
+    """The add-in manifest, pointed at whichever address serves this app.
+
+    Sideload it from https://<your-deployment>/addin/manifest.xml and Word
+    loads the task pane from that same deployment.
+    """
+    xml = (ADDIN_DIR / "manifest.xml").read_text(encoding="utf-8")
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
+    if host:
+        xml = xml.replace("https://localhost:8000", f"{scheme}://{host}")
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Content-Disposition": 'attachment; filename="manifest.xml"'},
+    )
+
 
 if ADDIN_DIR.is_dir():
     app.mount("/addin", StaticFiles(directory=str(ADDIN_DIR), html=True), name="addin")
