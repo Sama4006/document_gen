@@ -72,3 +72,4 @@ htmlcov/
 # Build
 dist/
 build/
+server.log

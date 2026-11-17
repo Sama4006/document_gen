@@ -13,6 +13,7 @@ const PLACEHOLDER_RE = /\{\{\s*([A-Za-z0-9_][A-Za-z0-9_ .\-]*?)\s*\}\}/g;
 let inWord = false;
 let generatedText = '';
 let lastGeneratedFile = null;
+let lastGeneratedBase64 = null;
 /** name -> Set of raw tokens as typed in the document, e.g. "{{ DATE }}" */
 let documentTokens = new Map();
 let serverTemplates = [];
@@ -414,6 +415,7 @@ async function generateFromTemplate() {
         body: { prompt, template_path: template, context_retrieval_k: retrievalCount() }
     });
     lastGeneratedFile = result.output_path;
+    lastGeneratedBase64 = result.document_base64 || null;
     const sources = result.sources.length ? ` Sources: ${result.sources.join(', ')}.` : '';
     $('e2eSummary').textContent =
         `${result.output_path}: ${result.placeholders_filled.length} fields filled.${sources}`;
@@ -421,20 +423,31 @@ async function generateFromTemplate() {
     showStatus('Document ready.', 'success', 2500);
 }
 
+const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
 async function fetchGeneratedBlob() {
     if (!lastGeneratedFile) throw new Error('Generate a document first.');
+    if (lastGeneratedBase64) {
+        const bytes = Uint8Array.from(atob(lastGeneratedBase64), c => c.charCodeAt(0));
+        return new Blob([bytes], { type: DOCX_TYPE });
+    }
     const response = await fetchAPI(`/download/${encodeURIComponent(lastGeneratedFile)}`, { raw: true });
     return response.blob();
 }
 
-async function openGeneratedInWord() {
+async function generatedBase64() {
+    if (lastGeneratedBase64) return lastGeneratedBase64;
     const blob = await fetchGeneratedBlob();
-    const base64 = await new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result.split(',')[1]);
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(blob);
     });
+}
+
+async function openGeneratedInWord() {
+    const base64 = await generatedBase64();
     await Word.run(async context => {
         context.application.createDocument(base64).open();
         await context.sync();

@@ -38,27 +38,38 @@ class TemplateEngine:
             base += ".docx"
         return base
 
+    @staticmethod
+    def _template_dirs() -> List[Path]:
+        """Uploaded templates first, then the bundled ones."""
+        dirs = [settings.template_upload_path, settings.templates_path]
+        return list(dict.fromkeys(dirs))
+
     def resolve_template(self, name: str) -> Path:
-        """Map a template name to a file inside the templates directory."""
-        path = settings.templates_path / self._safe_name(name)
-        if not path.is_file():
-            raise FileNotFoundError(f"Template not found: {path.name}")
-        return path
+        """Map a template name to a file inside a templates directory."""
+        safe = self._safe_name(name)
+        for directory in self._template_dirs():
+            path = directory / safe
+            if path.is_file():
+                return path
+        raise FileNotFoundError(f"Template not found: {safe}")
 
     def list_templates(self) -> List[dict]:
-        directory = settings.templates_path
-        if not directory.is_dir():
-            return []
+        found: Dict[str, Path] = {}
+        for directory in self._template_dirs():
+            if directory.is_dir():
+                for path in directory.glob("*.docx"):
+                    if not path.name.startswith("~$"):
+                        found.setdefault(path.name, path)
         return [
-            {"name": p.name, "placeholders": self.find_placeholders(p)}
-            for p in sorted(directory.glob("*.docx"))
-            if not p.name.startswith("~$")
+            {"name": name, "placeholders": self.find_placeholders(found[name])}
+            for name in sorted(found)
         ]
 
     def save_template(self, filename: str, data: bytes) -> Path:
         name = self._safe_name(filename)
-        settings.templates_path.mkdir(parents=True, exist_ok=True)
-        path = settings.templates_path / name
+        directory = settings.template_upload_path
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / name
         path.write_bytes(data)
         try:
             Document(str(path))  # reject files that are not real .docx
